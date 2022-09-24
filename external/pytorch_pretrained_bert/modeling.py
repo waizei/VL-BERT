@@ -287,18 +287,20 @@ class BertSelfAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, hidden_states, attention_mask, output_attention_probs=False):
+    def get_attention_map(self, hidden_states):
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
-        mixed_value_layer = self.value(hidden_states)
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
         key_layer = self.transpose_for_scores(mixed_key_layer)
-        value_layer = self.transpose_for_scores(mixed_value_layer)
-
-        # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
+        return attention_scores / math.sqrt(self.attention_head_size)
+
+    def forward(self, hidden_states, pos_states, attention_mask, output_attention_probs=False):
+        mixed_value_layer = self.value(hidden_states)
+        value_layer = self.transpose_for_scores(mixed_value_layer)
+        attention_scores = (get_attention_map(hidden_states) + get_attention_map(pos_states))/math.sqrt(2)
+
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
 
