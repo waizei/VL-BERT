@@ -299,7 +299,7 @@ class BertSelfAttention(nn.Module):
     def forward(self, hidden_states, pos_states, attention_mask, output_attention_probs=False):
         mixed_value_layer = self.value(hidden_states)
         value_layer = self.transpose_for_scores(mixed_value_layer)
-        attention_scores = (get_attention_map(hidden_states) + get_attention_map(pos_states))/math.sqrt(2)
+        attention_scores = (self.get_attention_map(hidden_states) + self.get_attention_map(pos_states))/math.sqrt(2)
 
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
