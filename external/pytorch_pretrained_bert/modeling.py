@@ -280,6 +280,9 @@ class BertSelfAttention(nn.Module):
         self.key = nn.Linear(config.hidden_size, self.all_head_size)
         self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
+        self.pos_query = nn.Linear(config.hidden_size, self.all_head_size)
+        self.pos_key = nn.Linear(config.hidden_size, self.all_head_size)
+
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
     def transpose_for_scores(self, x):
@@ -287,9 +290,9 @@ class BertSelfAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def get_attention_map(self, hidden_states):
-        mixed_query_layer = self.query(hidden_states)
-        mixed_key_layer = self.key(hidden_states)
+    def get_attention_map(self, hidden_states, query, key):
+        mixed_query_layer = query(hidden_states)
+        mixed_key_layer = key(hidden_states)
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
         key_layer = self.transpose_for_scores(mixed_key_layer)
@@ -299,7 +302,8 @@ class BertSelfAttention(nn.Module):
     def forward(self, hidden_states, pos_states, attention_mask, output_attention_probs=False):
         mixed_value_layer = self.value(hidden_states)
         value_layer = self.transpose_for_scores(mixed_value_layer)
-        attention_scores = (self.get_attention_map(hidden_states) + self.get_attention_map(pos_states))/math.sqrt(2)
+        attention_scores = (self.get_attention_map(hidden_states, self.query, self.key) +
+                            self.get_attention_map(pos_states, self.pos_query, self.pos_key))/math.sqrt(2)
 
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
