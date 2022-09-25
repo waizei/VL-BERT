@@ -313,7 +313,7 @@ class VisualLinguisticBert(BaseModel):
         if len(unexpected_keys) > 0:
             print("Warnings: Unexpected keys: {}.".format(unexpected_keys))
         self.embedding_LayerNorm.load_state_dict(embedding_ln_pretrained_state_dict)
-        self.encoder.load_state_dict(encoder_pretrained_state_dict)
+        self.encoder.load_state_dict(encoder_pretrained_state_dict,False)
         if self.config.with_pooler and len(pooler_pretrained_state_dict) > 0:
             self.pooler.load_state_dict(pooler_pretrained_state_dict)
 
