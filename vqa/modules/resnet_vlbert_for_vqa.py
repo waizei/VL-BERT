@@ -146,7 +146,7 @@ class ResNetVLBERT(Module):
         q_end = 1 + question_mask.sum(1, keepdim=True)
         a_end = q_end + 1 + answer_mask.sum(1, keepdim=True)
         input_ids = torch.zeros((batch_size, max_len), dtype=question.dtype, device=question.device)
-        input_mask = torch.ones((batch_size, max_len), dtype=torch.uint8, device=question.device)
+        input_mask = torch.ones((batch_size, max_len), dtype=torch.bool, device=question.device)
         input_type_ids = torch.zeros((batch_size, max_len), dtype=question.dtype, device=question.device)
         text_tags = input_type_ids.new_zeros((batch_size, max_len))
         grid_i, grid_j = torch.meshgrid(torch.arange(batch_size, device=question.device),
@@ -207,6 +207,7 @@ class ResNetVLBERT(Module):
                                                                                                        answer_ids,
                                                                                                        answer_tags,
                                                                                                        answer_mask)
+        coord_embeddings=obj_reps['coord_reps']
         if self.config.NETWORK.NO_GROUNDING:
             obj_rep_zeroed = obj_reps['obj_reps'].new_zeros(obj_reps['obj_reps'].shape)
             text_tags.zero_()
@@ -230,6 +231,7 @@ class ResNetVLBERT(Module):
                                       text_mask,
                                       object_vl_embeddings,
                                       box_mask,
+                                      coord_embeddings,
                                       output_all_encoded_layers=False)
         _batch_inds = torch.arange(question.shape[0], device=question.device)
 
@@ -296,6 +298,7 @@ class ResNetVLBERT(Module):
                                                                                                        answer_ids,
                                                                                                        answer_tags,
                                                                                                        answer_mask)
+        coord_embeddings = obj_reps['coord_reps']
         if self.config.NETWORK.NO_GROUNDING:
             obj_rep_zeroed = obj_reps['obj_reps'].new_zeros(obj_reps['obj_reps'].shape)
             text_tags.zero_()
@@ -319,6 +322,7 @@ class ResNetVLBERT(Module):
                                       text_mask,
                                       object_vl_embeddings,
                                       box_mask,
+                                      coord_embeddings,
                                       output_all_encoded_layers=False)
         _batch_inds = torch.arange(question.shape[0], device=question.device)
 

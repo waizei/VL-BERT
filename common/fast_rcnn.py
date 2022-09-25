@@ -108,6 +108,12 @@ class FastRCNN(nn.Module):
             torch.nn.ReLU(inplace=True),
         )
 
+        self.coord_obj_downsample = torch.nn.Sequential(
+            torch.nn.Dropout(p=0.1),
+            torch.nn.Linear( 2048 + (128 if config.NETWORK.IMAGE_SEMANTIC else 0), final_dim),
+            torch.nn.ReLU(inplace=True),
+        )
+
     def init_weight(self):
         if not self.image_feat_precomputed:
             if self.pretrained_model_path is None:
@@ -171,13 +177,14 @@ class FastRCNN(nn.Module):
             torch.cat((boxes[box_inds[:, 0], box_inds[:, 1]], im_info[box_inds[:, 0], :2]), 1),
             256
         )
+        coord_to_downsample= coord_embed.clone().view(coord_embed.shape[0], -1)
         feats_to_downsample = torch.cat((coord_embed.view((coord_embed.shape[0], -1)), feats_to_downsample), -1)
         final_feats = self.obj_downsample(feats_to_downsample)
-
+        final_coord_feats=self.coord_obj_downsample(coord_to_downsample)
         # Reshape into a padded sequence - this is expensive and annoying but easier to implement and debug...
         obj_reps = pad_sequence(final_feats, box_mask.sum(1).tolist())
         post_roialign = pad_sequence(post_roialign, box_mask.sum(1).tolist())
-
+        coord_reps= pad_sequence(final_coord_feats, box_mask.sum(1).tolist())
         # DataParallel compatibility
         obj_reps_padded = obj_reps.new_zeros((obj_reps.shape[0], boxes.shape[1], obj_reps.shape[2]))
         obj_reps_padded[:, :obj_reps.shape[1]] = obj_reps
@@ -186,10 +193,15 @@ class FastRCNN(nn.Module):
         post_roialign_padded[:, :post_roialign.shape[1]] = post_roialign
         post_roialign = post_roialign_padded
 
+        coord_reps_padded = coord_reps.new_zeros((coord_reps.shape[0], boxes.shape[1], coord_reps.shape[2]))
+        coord_reps_padded[:, :coord_reps.shape[1]] = coord_reps
+        coord_reps = coord_reps_padded
+
         # Output
         output_dict = {
             'obj_reps_raw': post_roialign,
             'obj_reps': obj_reps,
+            'coord_reps': coord_reps
         }
         if (not self.image_feat_precomputed) and self.enable_cnn_reg_loss:
             output_dict.update({'obj_logits': obj_logits,

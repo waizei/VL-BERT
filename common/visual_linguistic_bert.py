@@ -99,17 +99,19 @@ class VisualLinguisticBert(BaseModel):
                 text_mask,
                 object_vl_embeddings,
                 object_mask,
+                pos_state,
                 output_all_encoded_layers=True,
                 output_text_and_object_separately=False,
                 output_attention_probs=False):
 
         # get seamless concatenate embeddings and mask
-        embedding_output, attention_mask, text_mask_new, object_mask_new = self.embedding(text_input_ids,
+        embedding_output, attention_mask, text_mask_new, object_mask_new,pos_state = self.embedding(text_input_ids,
                                                                                           text_token_type_ids,
                                                                                           text_visual_embeddings,
                                                                                           text_mask,
                                                                                           object_vl_embeddings,
-                                                                                          object_mask)
+                                                                                          object_mask,
+                                                                                          pos_state)
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -131,11 +133,13 @@ class VisualLinguisticBert(BaseModel):
         if output_attention_probs:
             encoded_layers, attention_probs = self.encoder(embedding_output,
                                                            extended_attention_mask,
+                                                           pos_state,
                                                            output_all_encoded_layers=output_all_encoded_layers,
                                                            output_attention_probs=output_attention_probs)
         else:
             encoded_layers = self.encoder(embedding_output,
                                           extended_attention_mask,
+                                          pos_state,
                                           output_all_encoded_layers=output_all_encoded_layers,
                                           output_attention_probs=output_attention_probs)
         sequence_output = encoded_layers[-1]
@@ -176,7 +180,8 @@ class VisualLinguisticBert(BaseModel):
                   text_visual_embeddings,
                   text_mask,
                   object_vl_embeddings,
-                  object_mask):
+                  object_mask,
+                  pos_state):
 
         text_linguistic_embedding = self.word_embeddings_wrapper(text_input_ids)
         if self.visual_1x1_text is not None:
@@ -231,6 +236,10 @@ class VisualLinguisticBert(BaseModel):
             position_ids[grid_pos == object_end] = self.config.max_position_embeddings - 1
 
         position_embeddings = self.position_embeddings(position_ids)
+        coord_embeddings = position_embeddings.new_zeros((bs, max_length, vl_embed_size))
+        coord_embeddings[grid_pos < text_end] = position_embeddings[grid_pos < text_end]
+        coord_embeddings[(grid_pos >= text_end) & (grid_pos < object_end)] = pos_state[object_mask]
+        coord_embeddings[grid_pos == object_end] = position_embeddings[grid_pos == object_end]
         mask = text_mask.new_zeros((bs, max_length))
         mask[grid_pos <= object_end] = 1
 
@@ -238,7 +247,7 @@ class VisualLinguisticBert(BaseModel):
         embeddings = self.embedding_LayerNorm(embeddings)
         embeddings = self.embedding_dropout(embeddings)
 
-        return embeddings, mask, grid_pos < text_end, (grid_pos >= text_end) & (grid_pos < object_end)
+        return embeddings, mask, grid_pos < text_end, (grid_pos >= text_end) & (grid_pos < object_end),coord_embeddings
 
     def load_language_pretrained_model(self, language_pretrained_model_path):
         pretrained_state_dict = torch.load(language_pretrained_model_path, map_location=lambda storage, loc: storage)
@@ -350,6 +359,7 @@ class VisualLinguisticBertForPretraining(VisualLinguisticBert):
                 text_mask,
                 object_vl_embeddings,
                 object_mask,
+                pos_state,
                 output_all_encoded_layers=True,
                 output_text_and_object_separately=False):
 
@@ -360,6 +370,7 @@ class VisualLinguisticBertForPretraining(VisualLinguisticBert):
             text_mask,
             object_vl_embeddings,
             object_mask,
+            pos_state,
             output_all_encoded_layers=False,
             output_text_and_object_separately=True
         )

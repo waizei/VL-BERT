@@ -296,10 +296,10 @@ class BertSelfAttention(nn.Module):
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
         return attention_scores / math.sqrt(self.attention_head_size)
 
-    def forward(self, hidden_states, pos_states, attention_mask, output_attention_probs=False):
+    def forward(self, hidden_states,  attention_mask,pos_states, output_attention_probs=False):
         mixed_value_layer = self.value(hidden_states)
         value_layer = self.transpose_for_scores(mixed_value_layer)
-        attention_scores = (get_attention_map(hidden_states) + get_attention_map(pos_states))/math.sqrt(2)
+        attention_scores = (self.get_attention_map(hidden_states) + self.get_attention_map(pos_states))/math.sqrt(2)
 
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
@@ -341,8 +341,8 @@ class BertAttention(nn.Module):
         self.self = BertSelfAttention(config)
         self.output = BertSelfOutput(config)
 
-    def forward(self, input_tensor, attention_mask, output_attention_probs=False):
-        self_output = self.self(input_tensor, attention_mask, output_attention_probs=output_attention_probs)
+    def forward(self, input_tensor, attention_mask,pos_state, output_attention_probs=False):
+        self_output = self.self(input_tensor, attention_mask,pos_state, output_attention_probs=output_attention_probs)
         if output_attention_probs:
             self_output, attention_probs = self_output
         attention_output = self.output(self_output, input_tensor)
@@ -387,8 +387,8 @@ class BertLayer(nn.Module):
         self.intermediate = BertIntermediate(config)
         self.output = BertOutput(config)
 
-    def forward(self, hidden_states, attention_mask, output_attention_probs=False):
-        attention_output = self.attention(hidden_states, attention_mask, output_attention_probs=output_attention_probs)
+    def forward(self, hidden_states, attention_mask,pos_state, output_attention_probs=False):
+        attention_output = self.attention(hidden_states, attention_mask,pos_state, output_attention_probs=output_attention_probs)
         if output_attention_probs:
             attention_output, attention_probs = attention_output
         intermediate_output = self.intermediate(attention_output)
@@ -405,11 +405,11 @@ class BertEncoder(nn.Module):
         layer = BertLayer(config)
         self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_hidden_layers)])
 
-    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True, output_attention_probs=False):
+    def forward(self, hidden_states, attention_mask, pos_state,output_all_encoded_layers=True, output_attention_probs=False):
         all_encoder_layers = []
         all_attention_probs = []
         for layer_module in self.layer:
-            hidden_states = layer_module(hidden_states, attention_mask, output_attention_probs=output_attention_probs)
+            hidden_states = layer_module(hidden_states, attention_mask,pos_state, output_attention_probs=output_attention_probs)
             if output_attention_probs:
                 hidden_states, attention_probs = hidden_states
                 all_attention_probs.append(attention_probs)
